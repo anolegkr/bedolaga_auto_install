@@ -96,6 +96,7 @@ edit_remnawave() {
     echo -e "${CYAN}Текущие настройки Remnawave:${NC}"
     echo -e "  API_URL: $(get_env_value REMNAWAVE_API_URL)"
     echo -e "  API_KEY: $(get_env_value REMNAWAVE_API_KEY | head -c 20)..."
+    echo -e "  AUTH_TYPE: $(get_env_value REMNAWAVE_AUTH_TYPE)"
     echo -e "  SECRET_KEY (eGames): $(get_env_value REMNAWAVE_SECRET_KEY)"
     echo
     
@@ -112,9 +113,26 @@ edit_remnawave() {
     fi
     
     echo
-    echo -e "${YELLOW}REMNAWAVE_SECRET_KEY нужен ТОЛЬКО для панелей установленных через eGames${NC}"
-    echo -e "${YELLOW}и ТОЛЬКО если бот на ДРУГОМ сервере от панели.${NC}"
-    echo -e "${WHITE}Формат: параметр из URL панели (например MHPsUKCz=VfHqrBwp)${NC}"
+    echo -e "${WHITE}Тип авторизации:${NC}"
+    echo -e "  ${CYAN}[1]${NC} api_key (по умолчанию)"
+    echo -e "  ${CYAN}[2]${NC} basic_auth"
+    read -p "Выберите тип (Enter для пропуска): " AUTH_CHOICE
+    if [ "$AUTH_CHOICE" == "1" ]; then
+        set_env_value "REMNAWAVE_AUTH_TYPE" "api_key"
+        echo -e "${GREEN}✅ Тип авторизации: api_key${NC}"
+    elif [ "$AUTH_CHOICE" == "2" ]; then
+        set_env_value "REMNAWAVE_AUTH_TYPE" "basic_auth"
+        read -p "  REMNAWAVE_USERNAME: " NEW_USER
+        read -s -p "  REMNAWAVE_PASSWORD: " NEW_PASS
+        echo
+        [ -n "$NEW_USER" ] && set_env_value "REMNAWAVE_USERNAME" "$NEW_USER"
+        [ -n "$NEW_PASS" ] && set_env_value "REMNAWAVE_PASSWORD" "$NEW_PASS"
+        echo -e "${GREEN}✅ Basic Auth настроен${NC}"
+    fi
+    
+    echo
+    echo -e "${YELLOW}REMNAWAVE_SECRET_KEY нужен для панелей установленных через eGames${NC}"
+    echo -e "${WHITE}Формат: XXXXXXX:DDDDDDDD (из URL панели)${NC}"
     read -p "Новый REMNAWAVE_SECRET_KEY (Enter для пропуска, 'delete' для удаления): " NEW_SECRET
     if [ "$NEW_SECRET" == "delete" ]; then
         sed -i '/^REMNAWAVE_SECRET_KEY=/d' "$ENV_FILE"
@@ -234,6 +252,12 @@ show_config() {
     echo -e "${WHITE}Remnawave:${NC}"
     echo -e "  API_URL: $(get_env_value REMNAWAVE_API_URL)"
     echo -e "  API_KEY: $(get_env_value REMNAWAVE_API_KEY | head -c 20)..."
+    echo -e "  AUTH_TYPE: $(get_env_value REMNAWAVE_AUTH_TYPE)"
+    local auth_type=$(get_env_value REMNAWAVE_AUTH_TYPE)
+    if [ "$auth_type" == "basic_auth" ]; then
+        echo -e "  USERNAME: $(get_env_value REMNAWAVE_USERNAME)"
+        echo -e "  PASSWORD: ****"
+    fi
     local secret_key=$(get_env_value REMNAWAVE_SECRET_KEY)
     if [ -n "$secret_key" ]; then
         echo -e "  SECRET_KEY (eGames): ${YELLOW}установлен${NC}"
