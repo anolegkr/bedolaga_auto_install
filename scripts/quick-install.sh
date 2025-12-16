@@ -32,26 +32,62 @@ echo -e "${GREEN}📦 Установка базовых пакетов...${NC}"
 apt-get update -y
 apt-get install -y curl wget git
 
-# Скачивание и запуск основного скрипта
+# URL репозитория
+REPO_URL="https://github.com/wrx861/bedolaga_auto_install"
+REPO_RAW="https://raw.githubusercontent.com/wrx861/bedolaga_auto_install/main"
+
+# Директория для скриптов
+INSTALL_DIR="/tmp/bedolaga-installer"
+rm -rf "$INSTALL_DIR"
+mkdir -p "$INSTALL_DIR/lib"
+
 echo -e "${GREEN}📥 Загрузка установщика...${NC}"
 
-INSTALL_SCRIPT="/tmp/bedolaga-install.sh"
-
-curl -fsSL https://raw.githubusercontent.com/wrx861/bedolaga_auto_install/main/scripts/install.sh -o "$INSTALL_SCRIPT" || {
-    echo -e "${YELLOW}⚠️ Не удалось загрузить с GitHub, используем локальную версию...${NC}"
-    
-    # Если не удалось загрузить, клонируем репо со скриптами
-    TEMP_DIR="/tmp/bedolaga-temp"
-    rm -rf "$TEMP_DIR"
-    git clone https://github.com/wrx861/bedolaga_auto_install.git "$TEMP_DIR"
-    cp "$TEMP_DIR/scripts/install.sh" "$INSTALL_SCRIPT"
-    rm -rf "$TEMP_DIR"
+# Скачиваем главный скрипт и все модули
+download_file() {
+    local file=$1
+    local dest=$2
+    echo -e "${CYAN}   Загрузка: $file${NC}"
+    curl -fsSL "${REPO_RAW}/scripts/${file}" -o "$dest" || {
+        echo -e "${RED}   ❌ Не удалось загрузить $file${NC}"
+        return 1
+    }
 }
 
-chmod +x "$INSTALL_SCRIPT"
+# Основной скрипт
+download_file "install.sh" "$INSTALL_DIR/install.sh"
+
+# Модули
+MODULES=(
+    "lib/utils.sh"
+    "lib/packages.sh"
+    "lib/interactive.sh"
+    "lib/docker_setup.sh"
+    "lib/env_config.sh"
+    "lib/nginx_setup.sh"
+    "lib/final.sh"
+)
+
+for module in "${MODULES[@]}"; do
+    download_file "$module" "$INSTALL_DIR/$module" || {
+        echo -e "${YELLOW}⚠️ Не удалось загрузить модули, клонируем репозиторий...${NC}"
+        rm -rf "$INSTALL_DIR"
+        git clone "$REPO_URL" "$INSTALL_DIR"
+        cd "$INSTALL_DIR/scripts"
+        chmod +x install.sh lib/*.sh
+        echo -e "${GREEN}🚀 Запуск установщика...${NC}"
+        bash install.sh
+        exit $?
+    }
+done
+
+# Делаем скрипты исполняемыми
+chmod +x "$INSTALL_DIR/install.sh"
+chmod +x "$INSTALL_DIR/lib/"*.sh
 
 echo -e "${GREEN}🚀 Запуск установщика...${NC}"
-bash "$INSTALL_SCRIPT"
+cd "$INSTALL_DIR"
+bash install.sh
 
 # Очистка
-rm -f "$INSTALL_SCRIPT"
+rm -rf "$INSTALL_DIR"
