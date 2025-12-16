@@ -291,47 +291,69 @@ interactive_setup() {
         read -p "   REMNAWAVE_API_KEY: " REMNAWAVE_API_KEY < /dev/tty
     done
     
-    # Проверка на eGames
-    echo -e "\n${CYAN}5. Панель установлена через eGames?${NC}"
-    echo -e "${YELLOW}   eGames использует дополнительную защиту через SECRET_KEY${NC}"
-    echo -e "${YELLOW}   Если вы устанавливали панель через скрипт eGames - выберите 'y'${NC}"
+    # Дополнительные параметры авторизации
+    echo -e "\n${CYAN}5. Тип авторизации к панели${NC}"
+    echo -e "  ${CYAN}[1]${NC} API Key (по умолчанию)"
+    echo -e "  ${CYAN}[2]${NC} Basic Auth"
+    echo
+    read -p "   Выберите тип авторизации [1]: " auth_choice < /dev/tty
+    auth_choice=${auth_choice:-1}
+    
+    REMNAWAVE_AUTH_TYPE="api_key"
+    REMNAWAVE_USERNAME=""
+    REMNAWAVE_PASSWORD=""
+    
+    if [ "$auth_choice" == "2" ]; then
+        REMNAWAVE_AUTH_TYPE="basic_auth"
+        read -p "   Введите имя пользователя (REMNAWAVE_USERNAME): " REMNAWAVE_USERNAME < /dev/tty
+        read -s -p "   Введите пароль (REMNAWAVE_PASSWORD): " REMNAWAVE_PASSWORD < /dev/tty
+        echo
+        print_success "Basic Auth настроен"
+    fi
+    
+    # Проверка на eGames SECRET_KEY
+    echo -e "\n${CYAN}6. Панель установлена через скрипт eGames?${NC}"
+    echo -e "${YELLOW}   eGames добавляет защиту доступа к панели через параметр в URL${NC}"
     echo
     
-    if confirm "Используете панель, установленную скриптом eGames?"; then
+    read -p "   Используете панель, установленную скриптом eGames? [y/N]: " use_egames_input < /dev/tty
+    if [[ "${use_egames_input,,}" == "y" ]]; then
         USE_EGAMES="true"
-        echo -e "\n${CYAN}   Введите REMNAWAVE_SECRET_KEY${NC}"
-        echo -e "${YELLOW}   Формат: XXXXXXX:DDDDDDDD${NC}"
-        echo -e "${YELLOW}   Найти в панели: Ноды → Управление → Secret Key${NC}"
+        echo -e "\n${CYAN}   Введите секретный ключ в формате XXXXXXX:DDDDDDDD${NC}"
+        echo -e "${WHITE}   Это параметр из URL доступа к панели.${NC}"
+        echo
+        echo -e "${YELLOW}   Пример URL: https://panel.example.com/auth/login?MHPsUKCz:VfHqrBwp${NC}"
+        echo -e "${YELLOW}   SECRET_KEY: MHPsUKCz:VfHqrBwp${NC}"
+        echo
         read -p "   REMNAWAVE_SECRET_KEY: " REMNAWAVE_SECRET_KEY < /dev/tty
-        while [ -z "$REMNAWAVE_SECRET_KEY" ]; do
-            print_error "REMNAWAVE_SECRET_KEY обязателен для eGames!"
-            read -p "   REMNAWAVE_SECRET_KEY: " REMNAWAVE_SECRET_KEY < /dev/tty
-        done
-        print_success "eGames SECRET_KEY сохранён"
+        if [ -n "$REMNAWAVE_SECRET_KEY" ]; then
+            print_success "eGames SECRET_KEY сохранён"
+        else
+            print_warning "SECRET_KEY не указан"
+        fi
     else
         USE_EGAMES="false"
         REMNAWAVE_SECRET_KEY=""
-        print_info "Используется стандартная авторизация API Key"
     fi
     
     # Домен для webhook
-    echo -e "\n${CYAN}6. Домен для webhook (опционально)${NC}"
+    echo -e "\n${CYAN}7. Домен для webhook (опционально)${NC}"
     echo -e "${YELLOW}   Пример: bot.yourdomain.com${NC}"
     echo -e "${YELLOW}   Оставьте пустым для режима polling${NC}"
     input_domain "   WEBHOOK_DOMAIN: " WEBHOOK_DOMAIN
     
     # Домен для miniapp
-    echo -e "\n${CYAN}7. Домен для Mini App (опционально)${NC}"
+    echo -e "\n${CYAN}8. Домен для Mini App (опционально)${NC}"
     echo -e "${YELLOW}   Пример: miniapp.yourdomain.com${NC}"
     input_domain "   MINIAPP_DOMAIN: " MINIAPP_DOMAIN
     
     # Настройки уведомлений
-    echo -e "\n${CYAN}8. Chat ID для уведомлений (опционально)${NC}"
+    echo -e "\n${CYAN}9. Chat ID для уведомлений (опционально)${NC}"
     echo -e "${YELLOW}   Формат: -1001234567890${NC}"
     read -p "   ADMIN_NOTIFICATIONS_CHAT_ID: " ADMIN_NOTIFICATIONS_CHAT_ID < /dev/tty
     
     # PostgreSQL пароль
-    echo -e "\n${CYAN}9. Пароль для PostgreSQL${NC}"
+    echo -e "\n${CYAN}10. Пароль для PostgreSQL${NC}"
     echo -e "${YELLOW}   Оставьте пустым для автогенерации${NC}"
     read -s -p "   POSTGRES_PASSWORD: " POSTGRES_PASSWORD < /dev/tty
     echo
