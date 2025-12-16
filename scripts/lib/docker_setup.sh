@@ -307,10 +307,16 @@ networks:
     name: remnawave_bot_network
     driver: bridge
   remnawave_network:
-    name: ${network_name}
+    name: $network_name
     external: true
 EOF
-    print_success "Создан docker-compose.local.yml"
+    
+    # Проверяем что имя сети записалось правильно
+    if grep -q "name: $network_name" docker-compose.local.yml; then
+        print_success "Создан docker-compose.local.yml (сеть: $network_name)"
+    else
+        print_warning "Проверьте сеть в docker-compose.local.yml"
+    fi
 }
 
 # Запуск Docker контейнеров
@@ -389,38 +395,86 @@ ensure_network_connection() {
     
     print_info "Проверка подключения контейнеров к сети $network..."
     
-    # Проверяем существует ли сеть
+    # Пробуем найти сеть панели автоматически если указанная не найдена
     if ! docker network inspect "$network" &>/dev/null; then
-        print_warning "Сеть $network не найдена!"
-        return 1
+        print_warning "Сеть $network не найдена, ищем сеть панели..."
+        
+        # Способ 1: По имени контейнера remnawave
+        local panel_network=$(docker inspect remnawave --format '{{range $net, $_ := .NetworkSettings.Networks}}{{$net}}{{"\n"}}{{end}}' 2>/dev/null | grep -v "^$" | head -1)
+        
+        if [ -n "$panel_network" ] && [ "$panel_network" != "host" ] && [ "$panel_network" != "none" ]; then
+            network="$panel_network"
+            print_info "Найдена сеть панели: $network"
+        else
+            # Способ 2: Поиск по паттерну
+            local found_net=$(docker network ls --format '{{.Name}}' | grep -i "remnawave" | grep -v "bot" | head -1)
+            if [ -n "$found_net" ]; then
+                network="$found_net"
+                print_info "Найдена сеть: $network"
+            else
+                print_error "Не удалось найти сеть панели Remnawave!"
+                print_info "Доступные сети:"
+                docker network ls --format "  - {{.Name}}"
+                return 1
+            fi
+        fi
     fi
     
     # Подключаем контейнеры бота к сети панели
     local containers=("remnawave_bot" "remnawave_bot_db" "remnawave_bot_redis")
+    local connected=0
     
     for container in "${containers[@]}"; do
         if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
             # Проверяем, подключен ли уже
-            if ! docker inspect "$container" --format '{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{"\\n"}}{{end}}' | grep -q "^${network}$"; then
+            local current_nets=$(docker inspect "$container" --format '{{range $net, $config := .NetworkSettings.Networks}}{{$net}} {{end}}' 2>/dev/null)
+            
+            if echo "$current_nets" | grep -q "$network"; then
+                print_info "$container уже подключен к $network"
+            else
                 print_info "Подключаем $container к сети $network..."
-                docker network connect "$network" "$container" 2>/dev/null || true
+                if docker network connect "$network" "$container" 2>/dev/null; then
+                    print_success "$container подключен"
+                    ((connected++))
+                else
+                    print_warning "Не удалось подключить $container"
+                fi
             fi
         fi
     done
     
-    print_success "Контейнеры подключены к сети панели"
+    if [ $connected -gt 0 ]; then
+        print_success "Контейнеры подключены к сети панели"
+    fi
 }
 
 # Проверка связи с панелью (быстрая)
 verify_panel_connection() {
     print_info "Проверка связи с панелью Remnawave..."
     
+    # Ждём пока контейнер запустится
+    sleep 3
+    
     # Быстрая проверка DNS (занимает <1 сек)
     if docker exec remnawave_bot getent hosts remnawave >/dev/null 2>&1; then
-        print_success "Связь с панелью установлена (http://remnawave:3000)"
+        local panel_ip=$(docker exec remnawave_bot getent hosts remnawave 2>/dev/null | awk '{print $1}')
+        print_success "Связь с панелью установлена!"
+        echo -e "${GREEN}   remnawave -> $panel_ip:3000${NC}"
     else
-        print_warning "DNS remnawave не найден"
-        print_info "Бот проверит подключение при запуске. Проверьте логи: ./logs.sh"
+        print_error "❌ DNS remnawave НЕ НАЙДЕН!"
+        echo
+        echo -e "${YELLOW}   Контейнеры бота не видят панель Remnawave.${NC}"
+        echo -e "${YELLOW}   Выполните команды для исправления:${NC}"
+        echo
+        echo -e "${CYAN}   # Узнать сеть панели:${NC}"
+        echo -e "${WHITE}   docker inspect remnawave --format '{{range \$net, \$_ := .NetworkSettings.Networks}}{{\$net}}{{end}}'${NC}"
+        echo
+        echo -e "${CYAN}   # Подключить бота к этой сети (замените NETWORK_NAME):${NC}"
+        echo -e "${WHITE}   docker network connect NETWORK_NAME remnawave_bot${NC}"
+        echo -e "${WHITE}   docker network connect NETWORK_NAME remnawave_bot_db${NC}"
+        echo -e "${WHITE}   docker network connect NETWORK_NAME remnawave_bot_redis${NC}"
+        echo
+        echo -e "${CYAN}   # Или перезапустите установку с правильным именем сети${NC}"
     fi
 }
 
