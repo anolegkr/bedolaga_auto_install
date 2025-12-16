@@ -34,6 +34,9 @@ setup_nginx() {
         # Используем системный nginx
         setup_nginx_system_mode
     fi
+    
+    # Получение SSL сертификатов
+    setup_ssl
 }
 
 # Добавление SSL сертификатов бота в docker-compose панели
