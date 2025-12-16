@@ -598,17 +598,37 @@ setup_ssl() {
             systemctl start certbot.timer 2>/dev/null || true
             print_success "SSL сертификаты настроены"
             
-            # Если использовали nginx панели - нужно перезапустить его чтобы подхватить новые серты
+            # Если использовали nginx панели - нужно добавить сертификаты и перезапустить
             if [ "$PANEL_NGINX_HOST_MODE" = "true" ]; then
+                print_info "Добавление сертификатов в конфигурацию панели..."
+                
+                # Добавляем монтирование /etc/letsencrypt в docker-compose панели
+                add_ssl_to_panel_compose
+                
+                # Перезапускаем nginx панели с пересозданием контейнера (для подхвата новых volumes)
                 print_info "Перезапуск nginx панели для применения сертификатов..."
                 cd "$REMNAWAVE_PANEL_DIR"
-                docker compose restart remnawave-nginx 2>/dev/null || docker restart remnawave-nginx 2>/dev/null
+                docker compose up -d --force-recreate remnawave-nginx 2>/dev/null || \
+                docker compose restart remnawave-nginx 2>/dev/null || \
+                docker restart remnawave-nginx 2>/dev/null
+                
+                # Проверяем что сертификаты видны в контейнере
+                sleep 3
+                if docker exec remnawave-nginx test -f "/etc/letsencrypt/live/${WEBHOOK_DOMAIN:-$MINIAPP_DOMAIN}/fullchain.pem" 2>/dev/null; then
+                    print_success "Сертификаты успешно подключены к nginx панели"
+                else
+                    print_warning "Сертификаты могут быть недоступны в контейнере nginx"
+                    print_info "Попробуйте вручную: cd $REMNAWAVE_PANEL_DIR && docker compose up -d --force-recreate remnawave-nginx"
+                fi
             fi
         else
             print_warning "SSL сертификаты не были получены"
             echo -e "${CYAN}   Вы можете получить их позже командой:${NC}"
             if [ "$PANEL_NGINX_HOST_MODE" = "true" ]; then
-                echo -e "${CYAN}   docker stop remnawave-nginx && certbot certonly --standalone -d yourdomain.com && docker start remnawave-nginx${NC}"
+                echo -e "${CYAN}   1. docker stop remnawave-nginx${NC}"
+                echo -e "${CYAN}   2. certbot certonly --standalone -d yourdomain.com${NC}"
+                echo -e "${CYAN}   3. docker start remnawave-nginx${NC}"
+                echo -e "${CYAN}   4. cd $REMNAWAVE_PANEL_DIR && docker compose up -d --force-recreate remnawave-nginx${NC}"
             else
                 echo -e "${CYAN}   certbot --nginx -d yourdomain.com${NC}"
             fi
@@ -616,10 +636,72 @@ setup_ssl() {
     else
         print_info "SSL сертификаты можно получить позже командой:"
         if [ "$PANEL_NGINX_HOST_MODE" = "true" ]; then
-            echo -e "${CYAN}  docker stop remnawave-nginx && certbot certonly --standalone -d yourdomain.com && docker start remnawave-nginx${NC}"
+            echo -e "${CYAN}  1. docker stop remnawave-nginx${NC}"
+            echo -e "${CYAN}  2. certbot certonly --standalone -d yourdomain.com${NC}"
+            echo -e "${CYAN}  3. docker start remnawave-nginx${NC}"
+            echo -e "${CYAN}  4. cd $REMNAWAVE_PANEL_DIR && docker compose up -d --force-recreate remnawave-nginx${NC}"
         else
             echo -e "${CYAN}  certbot --nginx -d yourdomain.com${NC}"
         fi
+    fi
+}
+
+# Функция для ручного подключения SSL сертификатов к nginx панели
+# Можно вызвать отдельно после получения сертификатов вручную
+apply_ssl_to_panel_nginx() {
+    local domain=$1
+    
+    if [ -z "$domain" ]; then
+        print_error "Укажите домен: apply_ssl_to_panel_nginx yourdomain.com"
+        return 1
+    fi
+    
+    # Проверяем существование сертификатов
+    if [ ! -f "/etc/letsencrypt/live/$domain/fullchain.pem" ]; then
+        print_error "Сертификат для $domain не найден в /etc/letsencrypt/live/$domain/"
+        return 1
+    fi
+    
+    print_info "Подключение SSL сертификата для $domain..."
+    
+    # Находим директорию панели
+    local panel_dir=""
+    if [ -d "/opt/remnawave" ]; then
+        panel_dir="/opt/remnawave"
+    elif [ -d "/root/remnawave" ]; then
+        panel_dir="/root/remnawave"
+    else
+        print_error "Директория панели Remnawave не найдена"
+        return 1
+    fi
+    
+    local panel_compose="$panel_dir/docker-compose.yml"
+    
+    if [ ! -f "$panel_compose" ]; then
+        print_error "docker-compose.yml панели не найден: $panel_compose"
+        return 1
+    fi
+    
+    # Устанавливаем переменную для add_ssl_to_panel_compose
+    REMNAWAVE_PANEL_DIR="$panel_dir"
+    
+    # Добавляем монтирование /etc/letsencrypt
+    add_ssl_to_panel_compose
+    
+    # Перезапускаем nginx с пересозданием контейнера
+    print_info "Перезапуск nginx панели..."
+    cd "$panel_dir"
+    docker compose up -d --force-recreate remnawave-nginx 2>/dev/null || \
+    docker compose restart remnawave-nginx 2>/dev/null || \
+    docker restart remnawave-nginx 2>/dev/null
+    
+    sleep 3
+    
+    # Проверяем доступность сертификата
+    if docker exec remnawave-nginx test -f "/etc/letsencrypt/live/$domain/fullchain.pem" 2>/dev/null; then
+        print_success "SSL сертификат для $domain успешно подключен!"
+    else
+        print_warning "Сертификат может быть недоступен. Проверьте логи: docker logs remnawave-nginx"
     fi
 }
 
