@@ -55,8 +55,16 @@ REDIS_URL=redis://redis:6379/0
 # ===== REMNAWAVE API =====
 REMNAWAVE_API_URL=${REMNAWAVE_API_URL}
 REMNAWAVE_API_KEY=${REMNAWAVE_API_KEY}
-REMNAWAVE_AUTH_TYPE=api_key
+REMNAWAVE_AUTH_TYPE=${REMNAWAVE_AUTH_TYPE:-api_key}
 EOF
+
+    # Добавляем Basic Auth параметры если выбран этот тип
+    if [ "$REMNAWAVE_AUTH_TYPE" == "basic_auth" ]; then
+        cat >> .env << EOF
+REMNAWAVE_USERNAME=${REMNAWAVE_USERNAME}
+REMNAWAVE_PASSWORD=${REMNAWAVE_PASSWORD}
+EOF
+    fi
 
     # Добавляем REMNAWAVE_SECRET_KEY если указан (для eGames)
     if [ -n "$REMNAWAVE_SECRET_KEY" ]; then
