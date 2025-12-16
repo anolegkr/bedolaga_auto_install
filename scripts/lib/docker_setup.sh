@@ -1,0 +1,408 @@
+#!/bin/bash
+
+# ===============================================
+# 🐳 DOCKER НАСТРОЙКА И УПРАВЛЕНИЕ
+# ===============================================
+
+# Клонирование репозитория
+clone_repository() {
+    print_step "Клонирование репозитория"
+    
+    if [ -d "$INSTALL_DIR" ]; then
+        print_warning "Директория $INSTALL_DIR уже существует"
+        if confirm "Удалить и клонировать заново?"; then
+            rm -rf "$INSTALL_DIR"
+        else
+            print_info "Используем существующую директорию"
+            cd "$INSTALL_DIR"
+            git pull origin main || true
+            return
+        fi
+    fi
+    
+    git clone "$REPO_URL" "$INSTALL_DIR"
+    cd "$INSTALL_DIR"
+    print_success "Репозиторий клонирован в $INSTALL_DIR"
+}
+
+# Создание необходимых директорий
+create_directories() {
+    print_step "Создание директорий"
+    
+    cd "$INSTALL_DIR"
+    mkdir -p ./logs ./data ./data/backups ./data/referral_qr ./locales
+    chmod -R 755 ./logs ./data ./locales
+    chown -R 1000:1000 ./logs ./data ./locales 2>/dev/null || true
+    
+    print_success "Директории созданы"
+}
+
+# Проверка существующего volume PostgreSQL
+check_postgres_volume() {
+    local project_name=$(basename "$INSTALL_DIR" | tr '[:upper:]' '[:lower:]' | tr -dc 'a-z0-9')
+    local possible_volumes=(
+        "${project_name}_postgres_data"
+        "remnawave-bedolaga-telegram-bot_postgres_data"
+        "remnawavebedolagatelegrambot_postgres_data"
+    )
+    
+    for vol in "${possible_volumes[@]}"; do
+        if docker volume inspect "$vol" &>/dev/null; then
+            echo
+            print_warning "⚠️  Обнаружен существующий Docker volume: $vol"
+            echo -e "${YELLOW}   Это может вызвать ошибку аутентификации PostgreSQL,${NC}"
+            echo -e "${YELLOW}   если пароль в базе отличается от нового.${NC}"
+            echo
+            echo -e "${WHITE}   Варианты:${NC}"
+            echo -e "${CYAN}   1)${NC} Удалить старый volume (БАЗА ДАННЫХ БУДЕТ УТЕРЯНА!)"
+            echo -e "${CYAN}   2)${NC} Продолжить без изменений"
+            echo
+            read -p "   Выберите (1/2): " vol_choice < /dev/tty
+            
+            case $vol_choice in
+                1)
+                    print_warning "Удаление volume $vol..."
+                    docker volume rm "$vol" 2>/dev/null || true
+                    print_success "Volume удалён."
+                    ;;
+                2)
+                    print_info "Продолжаем со старым volume."
+                    print_warning "Если возникнет ошибка пароля, удалите volume вручную:"
+                    echo -e "${CYAN}   docker volume rm $vol${NC}"
+                    ;;
+                *)
+                    print_info "Продолжаем без изменений"
+                    ;;
+            esac
+            return
+        fi
+    done
+}
+
+# Создание стандартного docker-compose.yml для отдельной установки
+create_standalone_compose() {
+    print_info "Создание docker-compose.yml для отдельной установки..."
+    
+    cat > docker-compose.yml << 'STANDALONEEOF'
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: remnawave_bot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-remnawave_bot}
+      POSTGRES_USER: ${POSTGRES_USER:-remnawave_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-remnawave_user} -d ${POSTGRES_DB:-remnawave_bot}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: remnawave_bot_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bot:
+    build: .
+    container_name: remnawave_bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DOCKER_ENV: "true"
+      DATABASE_MODE: "auto"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "${POSTGRES_DB:-remnawave_bot}"
+      POSTGRES_USER: "${POSTGRES_USER:-remnawave_user}"
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:-secure_password_123}"
+      REDIS_URL: "redis://redis:6379/0"
+      TZ: "Europe/Moscow"
+      LOCALES_PATH: "${LOCALES_PATH:-/app/locales}"
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./data:/app/data:rw
+      - ./locales:/app/locales:rw
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./vpn_logo.png:/app/vpn_logo.png:ro
+    ports:
+      - "${WEB_API_PORT:-8080}:8080"
+    networks:
+      - bot_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bot_network:
+    name: remnawave_bot_network
+    driver: bridge
+STANDALONEEOF
+    print_success "Создан docker-compose.yml для отдельной установки"
+}
+
+# Создание docker-compose.local.yml для установки с панелью
+create_local_compose() {
+    print_info "Создание docker-compose.local.yml для подключения к панели..."
+    
+    local network_name="${REMNAWAVE_DOCKER_NETWORK:-remnawave-network}"
+    
+    cat > docker-compose.local.yml << EOF
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: remnawave_bot_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: \${POSTGRES_DB:-remnawave_bot}
+      POSTGRES_USER: \${POSTGRES_USER:-remnawave_user}
+      POSTGRES_PASSWORD: \${POSTGRES_PASSWORD:-secure_password_123}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - bot_network
+      - remnawave_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \${POSTGRES_USER:-remnawave_user} -d \${POSTGRES_DB:-remnawave_bot}"]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7-alpine
+    container_name: remnawave_bot_redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    networks:
+      - bot_network
+      - remnawave_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  bot:
+    build: .
+    container_name: remnawave_bot
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      DOCKER_ENV: "true"
+      DATABASE_MODE: "auto"
+      POSTGRES_HOST: "postgres"
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: "\${POSTGRES_DB:-remnawave_bot}"
+      POSTGRES_USER: "\${POSTGRES_USER:-remnawave_user}"
+      POSTGRES_PASSWORD: "\${POSTGRES_PASSWORD:-secure_password_123}"
+      REDIS_URL: "redis://redis:6379/0"
+      TZ: "Europe/Moscow"
+      LOCALES_PATH: "\${LOCALES_PATH:-/app/locales}"
+    volumes:
+      - ./logs:/app/logs:rw
+      - ./data:/app/data:rw
+      - ./locales:/app/locales:rw
+      - /etc/timezone:/etc/timezone:ro
+      - /etc/localtime:/etc/localtime:ro
+      - ./vpn_logo.png:/app/vpn_logo.png:ro
+    ports:
+      - "\${WEB_API_PORT:-8080}:8080"
+    networks:
+      - bot_network
+      - remnawave_network
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://localhost:8080/health || exit 1"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+
+networks:
+  bot_network:
+    name: remnawave_bot_network
+    driver: bridge
+  remnawave_network:
+    name: ${network_name}
+    external: true
+EOF
+    print_success "Создан docker-compose.local.yml"
+}
+
+# Запуск Docker контейнеров
+start_docker() {
+    print_step "Запуск Docker контейнеров"
+    
+    cd "$INSTALL_DIR"
+    
+    # Проверяем существующий volume PostgreSQL
+    check_postgres_volume
+    
+    # Остановка существующих контейнеров
+    docker compose down 2>/dev/null || true
+    docker compose -f docker-compose.local.yml down 2>/dev/null || true
+    
+    # Выбор docker-compose файла
+    COMPOSE_FILE="docker-compose.yml"
+    
+    if [ "$PANEL_INSTALLED_LOCALLY" = "true" ]; then
+        # Бот на одном сервере с панелью
+        print_info "Настройка подключения к сети панели Remnawave..."
+        
+        # Проверяем и подготавливаем сеть
+        prepare_panel_network
+        
+        # Создаём compose для локальной установки
+        create_local_compose
+        COMPOSE_FILE="docker-compose.local.yml"
+        print_info "Используем docker-compose.local.yml"
+    else
+        # Бот на отдельном сервере
+        print_info "Отдельная установка бота (standalone)..."
+        
+        if [ ! -f "docker-compose.yml" ]; then
+            print_warning "docker-compose.yml не найден, создаём..."
+            create_standalone_compose
+        fi
+        COMPOSE_FILE="docker-compose.yml"
+        print_info "Используем docker-compose.yml"
+    fi
+    
+    # Сборка и запуск
+    print_info "Запуск: docker compose -f $COMPOSE_FILE up -d --build"
+    docker compose -f "$COMPOSE_FILE" up -d --build
+    
+    print_info "Ожидание запуска контейнеров..."
+    sleep 10
+    
+    # Проверка статуса
+    docker compose -f "$COMPOSE_FILE" ps
+    
+    # Принудительное подключение к сети панели после запуска
+    if [ "$PANEL_INSTALLED_LOCALLY" = "true" ]; then
+        ensure_network_connection
+        verify_panel_connection
+    fi
+    
+    # Создаём скрипт-обёртку для docker compose
+    if [ "$COMPOSE_FILE" != "docker-compose.yml" ]; then
+        cat > dc.sh << EOF
+#!/bin/bash
+cd "$INSTALL_DIR"
+docker compose -f $COMPOSE_FILE "\$@"
+EOF
+        chmod +x dc.sh
+        print_info "Создан скрипт dc.sh для удобного управления"
+    fi
+    
+    print_success "Контейнеры запущены"
+}
+
+# Принудительное подключение контейнеров к сети панели
+ensure_network_connection() {
+    local network="${REMNAWAVE_DOCKER_NETWORK:-remnawave-network}"
+    
+    print_info "Проверка подключения контейнеров к сети $network..."
+    
+    # Проверяем существует ли сеть
+    if ! docker network inspect "$network" &>/dev/null; then
+        print_warning "Сеть $network не найдена!"
+        return 1
+    fi
+    
+    # Подключаем контейнеры бота к сети панели
+    local containers=("remnawave_bot" "remnawave_bot_db" "remnawave_bot_redis")
+    
+    for container in "${containers[@]}"; do
+        if docker ps --format '{{.Names}}' | grep -q "^${container}$"; then
+            # Проверяем, подключен ли уже
+            if ! docker inspect "$container" --format '{{range $net, $config := .NetworkSettings.Networks}}{{$net}}{{"\\n"}}{{end}}' | grep -q "^${network}$"; then
+                print_info "Подключаем $container к сети $network..."
+                docker network connect "$network" "$container" 2>/dev/null || true
+            fi
+        fi
+    done
+    
+    print_success "Контейнеры подключены к сети панели"
+}
+
+# Проверка связи с панелью
+verify_panel_connection() {
+    print_info "Проверка связи с панелью Remnawave..."
+    
+    # Проверяем доступность remnawave из контейнера бота
+    if docker exec remnawave_bot wget -q --timeout=5 --spider http://remnawave:3000 2>/dev/null; then
+        print_success "Связь с панелью установлена (http://remnawave:3000)"
+    else
+        print_warning "Не удалось проверить связь с панелью"
+        print_info "Возможно, панель ещё запускается. Проверьте позже."
+    fi
+}
+
+# Подготовка сети панели
+prepare_panel_network() {
+    local network="${REMNAWAVE_DOCKER_NETWORK:-remnawave-network}"
+    
+    # Проверяем существует ли сеть
+    if docker network inspect "$network" &>/dev/null; then
+        print_info "Сеть $network уже существует"
+    else
+        print_warning "Сеть $network не найдена"
+        print_info "Создаём сеть $network..."
+        docker network create "$network" 2>/dev/null || true
+        
+        if docker network inspect "$network" &>/dev/null; then
+            print_success "Сеть $network создана"
+        else
+            print_error "Не удалось создать сеть $network"
+        fi
+    fi
+}
