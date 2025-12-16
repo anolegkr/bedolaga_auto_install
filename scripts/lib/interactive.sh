@@ -291,15 +291,27 @@ interactive_setup() {
         read -p "   REMNAWAVE_API_KEY: " REMNAWAVE_API_KEY < /dev/tty
     done
     
-    # eGames Secret Key (для отдельной установки)
-    if [ "$PANEL_INSTALLED_LOCALLY" != "true" ]; then
-        echo -e "\n${CYAN}5. eGames Secret Key (опционально)${NC}"
-        echo -e "${YELLOW}   Если панель установлена через eGames, введите REMNAWAVE_SECRET_KEY${NC}"
+    # Проверка на eGames
+    echo -e "\n${CYAN}5. Панель установлена через eGames?${NC}"
+    echo -e "${YELLOW}   eGames использует дополнительную защиту через SECRET_KEY${NC}"
+    echo -e "${YELLOW}   Если вы устанавливали панель через скрипт eGames - выберите 'y'${NC}"
+    echo
+    
+    if confirm "Используете панель, установленную скриптом eGames?"; then
+        USE_EGAMES="true"
+        echo -e "\n${CYAN}   Введите REMNAWAVE_SECRET_KEY${NC}"
         echo -e "${YELLOW}   Формат: XXXXXXX:DDDDDDDD${NC}"
-        echo -e "${YELLOW}   Оставьте пустым если не используете eGames${NC}"
+        echo -e "${YELLOW}   Найти в панели: Ноды → Управление → Secret Key${NC}"
         read -p "   REMNAWAVE_SECRET_KEY: " REMNAWAVE_SECRET_KEY < /dev/tty
+        while [ -z "$REMNAWAVE_SECRET_KEY" ]; do
+            print_error "REMNAWAVE_SECRET_KEY обязателен для eGames!"
+            read -p "   REMNAWAVE_SECRET_KEY: " REMNAWAVE_SECRET_KEY < /dev/tty
+        done
+        print_success "eGames SECRET_KEY сохранён"
     else
+        USE_EGAMES="false"
         REMNAWAVE_SECRET_KEY=""
+        print_info "Используется стандартная авторизация API Key"
     fi
     
     # Домен для webhook
