@@ -621,22 +621,3 @@ setup_ssl() {
 }
 
 # Настройка firewall
-setup_firewall() {
-    print_step "Настройка Firewall (UFW)"
-    
-    ufw --force reset
-    ufw default deny incoming
-    ufw default allow outgoing
-    
-    # SSH
-    ufw allow 22/tcp
-    
-    # HTTP/HTTPS
-    ufw allow 80/tcp
-    ufw allow 443/tcp
-    
-    ufw --force enable
-    
-    print_success "Firewall настроен"
-    ufw status
-}
