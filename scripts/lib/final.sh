@@ -115,13 +115,9 @@ print_final_info() {
     echo ""
     
     echo -e "${YELLOW}⚠️  Важно:${NC}"
-    if [ "$KEEP_OLD_POSTGRES_VOLUME" = "true" ]; then
-        echo -e "  - ${RED}Используется СУЩЕСТВУЮЩАЯ база данных PostgreSQL${NC}"
-        echo -e "  - ${YELLOW}POSTGRES настройки в .env закомментированы${NC}"
-        echo -e "  - Если будут ошибки с БД - удалите volume и пересоздайте:"
-        echo -e "    ${CYAN}docker compose -f docker-compose.local.yml down -v${NC}"
-        echo -e "    ${CYAN}# Раскомментируйте POSTGRES_* в .env${NC}"
-        echo -e "    ${CYAN}docker compose -f docker-compose.local.yml up -d${NC}"
+    if [ "$USE_OLD_POSTGRES_SETTINGS" = "true" ]; then
+        echo -e "  - ${GREEN}Используются настройки PostgreSQL из существующей установки${NC}"
+        echo -e "  - Данные базы сохранены"
     else
         echo -e "  - Сохраните пароль PostgreSQL из файла .env"
     fi
