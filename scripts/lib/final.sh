@@ -119,8 +119,8 @@ print_final_info() {
     if [ "$PANEL_INSTALLED_LOCALLY" != "true" ] && [ -n "$REMNAWAVE_SECRET_KEY" ]; then
         echo -e "  - Убедитесь что REMNAWAVE_SECRET_KEY совпадает с панелью eGames"
     fi
-    if [ "$KEEP_EXISTING_VOLUMES" = "true" ]; then
-        echo -e "  - ${GREEN}Данные PostgreSQL сохранены, пароль закомментирован в .env${NC}"
+    if [ "$KEEP_EXISTING_VOLUMES" = "true" ] && [ -n "$OLD_POSTGRES_PASSWORD" ]; then
+        echo -e "  - ${GREEN}Данные PostgreSQL сохранены, пароль восстановлен из старого .env${NC}"
     else
         echo -e "  - Сохраните пароль PostgreSQL из файла .env"
     fi
