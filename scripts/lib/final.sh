@@ -115,8 +115,8 @@ print_final_info() {
     echo ""
     
     echo -e "${YELLOW}⚠️  Важно:${NC}"
-    if [ "$USE_OLD_POSTGRES_SETTINGS" = "true" ]; then
-        echo -e "  - ${GREEN}Используются настройки PostgreSQL из существующей установки${NC}"
+    if [ "$KEEP_OLD_ENV" = "true" ]; then
+        echo -e "  - ${GREEN}Настройки PostgreSQL сохранены из предыдущей установки${NC}"
         echo -e "  - Данные базы сохранены"
     else
         echo -e "  - Сохраните пароль PostgreSQL из файла .env"
