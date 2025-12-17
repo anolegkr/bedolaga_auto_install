@@ -342,6 +342,18 @@ server {
 setup_nginx_system_mode() {
     print_info "Настройка через системный nginx..."
     
+    # Определяем пути к конфигам nginx
+    local NGINX_AVAILABLE="/etc/nginx/sites-available"
+    local NGINX_ENABLED="/etc/nginx/sites-enabled"
+    
+    # Проверяем существование директорий
+    if [ ! -d "$NGINX_AVAILABLE" ]; then
+        mkdir -p "$NGINX_AVAILABLE"
+    fi
+    if [ ! -d "$NGINX_ENABLED" ]; then
+        mkdir -p "$NGINX_ENABLED"
+    fi
+    
     # Конфигурация для webhook домена
     if [ -n "$WEBHOOK_DOMAIN" ]; then
         print_info "Создание конфигурации для $WEBHOOK_DOMAIN"
@@ -427,7 +439,10 @@ server {
 }
 EOF
         
-        ln -sf "$NGINX_AVAILABLE/bedolaga-webhook" "$NGINX_ENABLED/bedolaga-webhook"
+        # Создаём символическую ссылку для активации
+        if [ "$NGINX_AVAILABLE" != "$NGINX_ENABLED" ]; then
+            ln -sf "$NGINX_AVAILABLE/bedolaga-webhook" "$NGINX_ENABLED/bedolaga-webhook"
+        fi
         print_success "Конфигурация webhook создана"
     fi
     
@@ -464,7 +479,10 @@ server {
 }
 EOF
         
-        ln -sf "$NGINX_AVAILABLE/bedolaga-miniapp" "$NGINX_ENABLED/bedolaga-miniapp"
+        # Создаём символическую ссылку для активации
+        if [ "$NGINX_AVAILABLE" != "$NGINX_ENABLED" ]; then
+            ln -sf "$NGINX_AVAILABLE/bedolaga-miniapp" "$NGINX_ENABLED/bedolaga-miniapp"
+        fi
         print_success "Конфигурация miniapp создана"
     fi
     
