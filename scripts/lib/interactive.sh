@@ -373,9 +373,12 @@ interactive_setup() {
     echo -e "${YELLOW}   Формат: -1001234567890${NC}"
     read -p "   ADMIN_NOTIFICATIONS_CHAT_ID: " ADMIN_NOTIFICATIONS_CHAT_ID < /dev/tty
     
-    # PostgreSQL пароль — только для первой установки
-    # При переустановке (KEEP_EXISTING_VOLUMES=true) пароль не спрашиваем
-    if [ "$KEEP_EXISTING_VOLUMES" != "true" ]; then
+    # PostgreSQL пароль
+    if [ "$KEEP_EXISTING_VOLUMES" = "true" ] && [ -n "$OLD_POSTGRES_PASSWORD" ]; then
+        # Переустановка с сохранением volumes — используем старый пароль
+        print_info "PostgreSQL: используется сохранённый пароль из старого .env"
+    else
+        # Первая установка или volumes удалены — спрашиваем/генерируем пароль
         echo -e "\n${CYAN}10. Пароль для PostgreSQL${NC}"
         echo -e "${YELLOW}   Оставьте пустым для автогенерации${NC}"
         read -s -p "   POSTGRES_PASSWORD: " POSTGRES_PASSWORD < /dev/tty
@@ -384,8 +387,6 @@ interactive_setup() {
             POSTGRES_PASSWORD=$(generate_safe_password 24)
             print_info "Сгенерирован пароль PostgreSQL"
         fi
-    else
-        print_info "PostgreSQL: используется существующий пароль из базы"
     fi
     
     # Генерация токенов
