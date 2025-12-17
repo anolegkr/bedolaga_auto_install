@@ -107,16 +107,20 @@ validate_domain() {
 # Проверка DNS записи домена
 check_domain_dns() {
     local domain=$1
-    local server_ip=$(curl -s ifconfig.me 2>/dev/null || curl -s icanhazip.com 2>/dev/null)
-    local domain_ip=$(dig +short "$domain" 2>/dev/null | head -1)
+    
+    # Получаем IPv4 адрес сервера (принудительно IPv4)
+    local server_ip=$(curl -4 -s ifconfig.me 2>/dev/null || curl -4 -s icanhazip.com 2>/dev/null || curl -4 -s ipv4.icanhazip.com 2>/dev/null)
+    
+    # Получаем IPv4 адрес домена (A-запись, не AAAA)
+    local domain_ip=$(dig +short -t A "$domain" 2>/dev/null | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | head -1)
     
     if [ -z "$server_ip" ]; then
-        print_warning "Не удалось определить IP сервера"
+        print_warning "Не удалось определить IPv4 сервера"
         return 1
     fi
     
     if [ -z "$domain_ip" ]; then
-        print_warning "DNS запись для $domain не найдена"
+        print_warning "A-запись (IPv4) для $domain не найдена"
         return 1
     fi
     
