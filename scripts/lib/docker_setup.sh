@@ -39,6 +39,13 @@ create_directories() {
 
 # Проверка существующего volume PostgreSQL
 check_postgres_volume() {
+    # ВАЖНО: Сначала сохраняем старый .env если существует
+    if [ -f "$INSTALL_DIR/.env" ]; then
+        cp "$INSTALL_DIR/.env" "/tmp/bedolaga_old_env_backup_$$"
+        export OLD_ENV_BACKUP="/tmp/bedolaga_old_env_backup_$$"
+        print_info "Сохранён бэкап существующего .env"
+    fi
+    
     # Ищем ВСЕ postgres volumes связанные с ботом
     local found_volumes=$(docker volume ls -q 2>/dev/null | grep -E "(postgres|bot)" | grep -v "remnawave_postgres" || true)
     
