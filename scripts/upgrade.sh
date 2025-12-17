@@ -3,9 +3,6 @@
 # ===============================================
 # 🔄 REMNAWAVE BEDOLAGA BOT - ОБНОВЛЕНИЕ
 # ===============================================
-# Этот скрипт обновляет существующую установку бота
-# и добавляет команду 'bot' если её нет
-# ===============================================
 
 set -e
 
@@ -16,6 +13,10 @@ CYAN='\033[0;36m'
 PURPLE='\033[0;35m'
 WHITE='\033[1;37m'
 NC='\033[0m'
+
+# ═══════════════════════════════════════════════════════════════
+# ФУНКЦИИ (определяем ДО использования)
+# ═══════════════════════════════════════════════════════════════
 
 # Автоопределение директории установки
 find_install_dir() {
@@ -29,74 +30,6 @@ find_install_dir() {
         echo ""
     fi
 }
-
-INSTALL_DIR=$(find_install_dir)
-
-if [ -z "$INSTALL_DIR" ]; then
-    echo -e "${RED}❌ Директория бота не найдена!${NC}"
-    echo -e "${YELLOW}Проверьте /opt/remnawave-bedolaga-telegram-bot или /root/remnawave-bedolaga-telegram-bot${NC}"
-    exit 1
-fi
-
-echo -e "${PURPLE}"
-echo "╔══════════════════════════════════════════════════════════════╗"
-echo "║     🔄 REMNAWAVE BEDOLAGA BOT - ОБНОВЛЕНИЕ 🔄               ║"
-echo "╚══════════════════════════════════════════════════════════════╝"
-echo -e "${NC}"
-
-echo -e "${WHITE}📁 Директория:${NC} ${CYAN}$INSTALL_DIR${NC}"
-
-# Определяем compose файл
-COMPOSE_FILE="docker-compose.yml"
-[ -f "$INSTALL_DIR/docker-compose.local.yml" ] && COMPOSE_FILE="docker-compose.local.yml"
-
-cd "$INSTALL_DIR"
-
-# Проверка наличия команды bot
-echo
-if [ -f "/usr/local/bin/bot" ]; then
-    echo -e "${GREEN}✅ Команда 'bot' установлена${NC}"
-else
-    echo -e "${YELLOW}⚠️  Команда 'bot' не найдена${NC}"
-fi
-
-# Главное меню
-echo
-echo -e "${WHITE}Что вы хотите сделать?${NC}"
-echo
-echo -e "  ${CYAN}1)${NC} 📦 Обновить бота (git pull + rebuild)"
-echo -e "  ${CYAN}2)${NC} 🎮 Установить команду 'bot' (если нет)"
-echo -e "  ${CYAN}3)${NC} 🔧 Обновить скрипты установщика"
-echo -e "  ${CYAN}4)${NC} 📋 Всё вместе (рекомендуется)"
-echo -e "  ${CYAN}0)${NC} Отмена"
-echo
-read -p "Ваш выбор [4]: " CHOICE < /dev/tty
-CHOICE=${CHOICE:-4}
-
-case $CHOICE in
-    1)
-        upgrade_bot
-        ;;
-    2)
-        install_bot_command
-        ;;
-    3)
-        update_installer
-        ;;
-    4)
-        upgrade_bot
-        install_bot_command
-        update_installer
-        ;;
-    0)
-        echo -e "${YELLOW}Отменено${NC}"
-        exit 0
-        ;;
-    *)
-        echo -e "${RED}Неверный выбор${NC}"
-        exit 1
-        ;;
-esac
 
 # Функция обновления бота
 upgrade_bot() {
@@ -169,7 +102,6 @@ install_bot_command() {
 
 INSTALL_DIR="$INSTALL_DIR"
 COMPOSE_FILE="$COMPOSE_FILE"
-INSTALLER_DIR="$INSTALL_DIR/.installer"
 
 # Цвета
 RED='\033[0;31m'
@@ -274,7 +206,7 @@ do_health() {
 do_config() {
     check_install_dir
     \${EDITOR:-nano} "\$INSTALL_DIR/.env"
-    echo -e "\${YELLOW}Перезапустите бота для применения изменений: bot restart\${NC}"
+    echo -e "\${YELLOW}Перезапустите бота для применения: bot restart\${NC}"
 }
 
 show_menu() {
@@ -294,15 +226,12 @@ show_menu() {
     echo
     
     echo -e "\${WHITE}═══════════════════════════════════════════════════════════════\${NC}"
-    echo -e "\${WHITE}Выберите действие:\${NC}"
     echo
     echo -e "  \${CYAN}1)\${NC} 📋 Логи              \${CYAN}6)\${NC} 💾 Создать бэкап"
     echo -e "  \${CYAN}2)\${NC} 📊 Статус            \${CYAN}7)\${NC} 🏥 Диагностика"
     echo -e "  \${CYAN}3)\${NC} 🔄 Перезапуск        \${CYAN}8)\${NC} ⚙️  Редактировать .env"
     echo -e "  \${CYAN}4)\${NC} ▶️  Запуск            \${CYAN}9)\${NC} 📦 Обновить бота"
-    echo -e "  \${CYAN}5)\${NC} ⏹️  Остановка"
-    echo
-    echo -e "  \${CYAN}q)\${NC} Выход"
+    echo -e "  \${CYAN}5)\${NC} ⏹️  Остановка         \${CYAN}q)\${NC} Выход"
     echo
 }
 
@@ -346,8 +275,6 @@ show_help() {
     echo -e "  \${GREEN}backup\${NC}     — Резервная копия"
     echo -e "  \${GREEN}health\${NC}     — Диагностика"
     echo -e "  \${GREEN}config\${NC}     — Редактировать .env"
-    echo
-    echo -e "\${WHITE}Директория:\${NC} \$INSTALL_DIR"
 }
 
 case "\$1" in
@@ -364,7 +291,7 @@ case "\$1" in
     "")         interactive_menu ;;
     *)
         echo -e "\${RED}❌ Неизвестная команда: \$1\${NC}"
-        echo -e "Используйте \${CYAN}bot help\${NC} для справки"
+        echo "Используйте: bot help"
         exit 1
         ;;
 esac
@@ -376,7 +303,7 @@ BOTEOF
     echo
     echo -e "${WHITE}Теперь доступно:${NC}"
     echo -e "  ${CYAN}bot${NC}        — интерактивное меню"
-    echo -e "  ${CYAN}bot help${NC}   — справка по командам"
+    echo -e "  ${CYAN}bot help${NC}   — справка"
 }
 
 # Функция обновления скриптов установщика
@@ -401,7 +328,6 @@ update_installer() {
         
         VERSION=$(cat "$INSTALLER_DIR/VERSION" 2>/dev/null || echo "?")
         echo -e "${GREEN}✅ Скрипты установщика обновлены (v$VERSION)${NC}"
-        echo -e "${WHITE}Директория:${NC} $INSTALLER_DIR"
     else
         echo -e "${RED}❌ Ошибка загрузки${NC}"
     fi
@@ -409,11 +335,81 @@ update_installer() {
     rm -rf "$TEMP_DIR"
 }
 
+# ═══════════════════════════════════════════════════════════════
+# ОСНОВНОЙ КОД
+# ═══════════════════════════════════════════════════════════════
+
+INSTALL_DIR=$(find_install_dir)
+
+if [ -z "$INSTALL_DIR" ]; then
+    echo -e "${RED}❌ Директория бота не найдена!${NC}"
+    echo -e "${YELLOW}Проверьте /opt/remnawave-bedolaga-telegram-bot${NC}"
+    exit 1
+fi
+
+# Определяем compose файл
+COMPOSE_FILE="docker-compose.yml"
+[ -f "$INSTALL_DIR/docker-compose.local.yml" ] && COMPOSE_FILE="docker-compose.local.yml"
+
+echo -e "${PURPLE}"
+echo "╔══════════════════════════════════════════════════════════════╗"
+echo "║     🔄 REMNAWAVE BEDOLAGA BOT - ОБНОВЛЕНИЕ 🔄               ║"
+echo "╚══════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
+
+echo -e "${WHITE}📁 Директория:${NC} ${CYAN}$INSTALL_DIR${NC}"
+echo
+
+# Проверка наличия команды bot
+if [ -f "/usr/local/bin/bot" ]; then
+    echo -e "${GREEN}✅ Команда 'bot' установлена${NC}"
+else
+    echo -e "${YELLOW}⚠️  Команда 'bot' не найдена${NC}"
+fi
+
+# Главное меню
+echo
+echo -e "${WHITE}Что вы хотите сделать?${NC}"
+echo
+echo -e "  ${CYAN}1)${NC} 📦 Обновить бота (git pull + rebuild)"
+echo -e "  ${CYAN}2)${NC} 🎮 Установить команду 'bot'"
+echo -e "  ${CYAN}3)${NC} 🔧 Обновить скрипты установщика"
+echo -e "  ${CYAN}4)${NC} 📋 Всё вместе (рекомендуется)"
+echo -e "  ${CYAN}0)${NC} Отмена"
+echo
+read -p "Ваш выбор [4]: " CHOICE < /dev/tty
+CHOICE=${CHOICE:-4}
+
+case $CHOICE in
+    1)
+        upgrade_bot
+        ;;
+    2)
+        install_bot_command
+        ;;
+    3)
+        update_installer
+        ;;
+    4)
+        upgrade_bot
+        install_bot_command
+        update_installer
+        ;;
+    0)
+        echo -e "${YELLOW}Отменено${NC}"
+        exit 0
+        ;;
+    *)
+        echo -e "${RED}Неверный выбор${NC}"
+        exit 1
+        ;;
+esac
+
 # Финальное сообщение
 echo
 echo -e "${GREEN}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${GREEN}║     ✅ ОБНОВЛЕНИЕ ЗАВЕРШЕНО!                                 ║${NC}"
 echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo
-echo -e "${WHITE}Теперь используйте команду ${CYAN}bot${NC} для управления ботом${NC}"
+echo -e "${WHITE}Используйте команду ${CYAN}bot${NC} для управления ботом${NC}"
 echo
