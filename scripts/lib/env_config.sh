@@ -39,24 +39,30 @@ EOF
     fi
     
     # Продолжаем .env файл
-    # Если используем существующую БД - комментируем POSTGRES настройки
-    if [ "$KEEP_OLD_POSTGRES_VOLUME" = "true" ]; then
+    # Если используем существующую БД - используем старые POSTGRES настройки
+    if [ "$USE_OLD_POSTGRES_SETTINGS" = "true" ]; then
+        # Используем старые настройки PostgreSQL
+        local pg_host="${OLD_POSTGRES_HOST:-postgres}"
+        local pg_port="${OLD_POSTGRES_PORT:-5432}"
+        local pg_db="${OLD_POSTGRES_DB:-remnawave_bot}"
+        local pg_user="${OLD_POSTGRES_USER:-remnawave_user}"
+        local pg_pass="${OLD_POSTGRES_PASSWORD}"
+        
         cat >> .env << EOF
 
 # ===== DATABASE =====
-# ⚠️ POSTGRES настройки закомментированы, т.к. используется существующая БД
-# Раскомментируйте если нужно переопределить учётные данные
+# ⚠️ Используются настройки из существующей БД
 DATABASE_MODE=auto
-#POSTGRES_HOST=postgres
-#POSTGRES_PORT=5432
-#POSTGRES_DB=remnawave_bot
-#POSTGRES_USER=remnawave_user
-#POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+POSTGRES_HOST=${pg_host}
+POSTGRES_PORT=${pg_port}
+POSTGRES_DB=${pg_db}
+POSTGRES_USER=${pg_user}
+POSTGRES_PASSWORD=${pg_pass}
 
 # ===== REDIS =====
 REDIS_URL=redis://redis:6379/0
 EOF
-        print_warning "POSTGRES настройки закомментированы (используется существующая БД)"
+        print_success "Использованы настройки PostgreSQL из существующей установки"
     else
         cat >> .env << EOF
 
