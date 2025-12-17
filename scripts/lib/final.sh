@@ -115,7 +115,16 @@ print_final_info() {
     echo ""
     
     echo -e "${YELLOW}⚠️  Важно:${NC}"
-    echo -e "  - Сохраните пароль PostgreSQL из файла .env"
+    if [ "$KEEP_OLD_POSTGRES_VOLUME" = "true" ]; then
+        echo -e "  - ${RED}Используется СУЩЕСТВУЮЩАЯ база данных PostgreSQL${NC}"
+        echo -e "  - ${YELLOW}POSTGRES настройки в .env закомментированы${NC}"
+        echo -e "  - Если будут ошибки с БД - удалите volume и пересоздайте:"
+        echo -e "    ${CYAN}docker compose -f docker-compose.local.yml down -v${NC}"
+        echo -e "    ${CYAN}# Раскомментируйте POSTGRES_* в .env${NC}"
+        echo -e "    ${CYAN}docker compose -f docker-compose.local.yml up -d${NC}"
+    else
+        echo -e "  - Сохраните пароль PostgreSQL из файла .env"
+    fi
     echo -e "  - Настройте бота в Telegram через @BotFather"
     if [ "$PANEL_INSTALLED_LOCALLY" != "true" ] && [ -n "$REMNAWAVE_SECRET_KEY" ]; then
         echo -e "  - Убедитесь что REMNAWAVE_SECRET_KEY совпадает с панелью eGames"
