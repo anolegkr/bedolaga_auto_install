@@ -3,8 +3,7 @@
 # ===============================================
 # 🔄 REMNAWAVE BEDOLAGA BOT - ОБНОВЛЕНИЕ
 # ===============================================
-
-set -e
+# НЕ используем set -e чтобы продолжить при ошибках
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -66,11 +65,16 @@ upgrade_bot() {
     
     # Пересборка контейнеров
     echo -e "${CYAN}🐳 Пересборка контейнеров...${NC}"
-    docker compose -f "$COMPOSE_FILE" down
+    docker compose -f "$COMPOSE_FILE" down || true
     docker compose -f "$COMPOSE_FILE" build --no-cache
-    docker compose -f "$COMPOSE_FILE" up -d
     
-    echo -e "${GREEN}✅ Бот обновлён и запущен${NC}"
+    if docker compose -f "$COMPOSE_FILE" up -d; then
+        echo -e "${GREEN}✅ Бот обновлён и запущен${NC}"
+    else
+        echo -e "${RED}⚠️  Ошибка запуска контейнеров!${NC}"
+        echo -e "${YELLOW}Проверьте: docker compose -f $COMPOSE_FILE logs${NC}"
+        echo -e "${YELLOW}Возможно нужно создать сеть: docker network create remnawave-network${NC}"
+    fi
 }
 
 # Функция установки команды bot
