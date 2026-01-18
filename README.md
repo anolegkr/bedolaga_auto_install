@@ -2,7 +2,7 @@
 
 # 🤖 Remnawave Bedolaga Bot 2.9.1 — Автоустановщик
 
-**Профессиональный скрипт автоматической установки Telegram бота для продажи VPN подписок**
+**Профессиональный скрипт автоматической установки Telegram бота для продажи VPN подписок***
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Ubuntu](https://img.shields.io/badge/Ubuntu-20.04%2B-orange)](https://ubuntu.com/)
