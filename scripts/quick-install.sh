@@ -33,8 +33,8 @@ apt-get update -y
 apt-get install -y curl wget git
 
 # URL репозитория
-REPO_URL="https://github.com/wrx861/bedolaga_auto_install"
-REPO_RAW="https://raw.githubusercontent.com/wrx861/bedolaga_auto_install/main"
+REPO_URL="https://github.com/anolegkr/bedolaga_auto_install"
+REPO_RAW="https://raw.githubusercontent.com/anolegkr/bedolaga_auto_install/main"
 
 # Директория для скриптов
 INSTALL_DIR="/tmp/bedolaga-installer"
