@@ -20,7 +20,7 @@
 Одна команда для полной установки бота:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/wrx861/bedolaga_auto_install/main/scripts/quick-install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/anolegkr/bedolaga_auto_install/main/scripts/quick-install.sh | sudo bash
 ```
 
 > 💡 **Совет:** Перед установкой подготовьте DNS записи для ваших доменов (см. раздел ниже)
